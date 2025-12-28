@@ -1,0 +1,106 @@
+# ===================================================================
+# General Run Settings
+# ===================================================================
+run_settings:
+  model_type: "TD3"      # Supported: "TD3", "DDPG", "SD3"
+  device: "cuda"         # "cuda" or "cpu"
+  seed: 48
+  training_seed: 99
+  eval_seed: 4
+  enable_logging: True
+# ===================================================================
+# Training and Testing Structure
+# ===================================================================
+training_params:
+  n_envs: 1                   # Number of parallel environments
+  target_episodes_per_env: 200000  # Total training length
+  steps_per_episode: 1      # contextual bandit, no bootstrapping
+
+testing_params:
+  test_episodes: 2000            # Number of episodes for final evaluation
+  test_steps: 1                  # Max steps per episode during evaluation
+# ==================================================================
+# Model Hyperparameters
+# ===================================================================
+model_hyperparameters:
+  # --- Common parameters for all models ---
+  shared:
+    learning_rate: 0.0001
+    batch_size: 32
+    buffer_size: 20000
+    learning_starts: 0     #INFEASIBLE ACTIONS, KEEP AT ZERO
+    train_freq: [1, "step"]
+    gradient_steps: 1
+    gamma: 0 #contextual bandit, no bootstrapping
+    policy_kwargs:
+      net_arch:
+        pi: [256, 256]  # Deep and wide for Actor
+        qf: [256, 256]  # Deep and wide for Critic
+    action_noise:
+      sigma_bf: 0.2
+      sigma_ris: 0.1
+  TD3_shared:
+    policy_delay: 3
+
+  # Specific params for DDPG (if any)
+  DDPG:
+    {} # No specific params needed now
+
+
+# ===================================================================
+# Environment Parameters
+# ===================================================================
+env_parameters:
+  
+  # --- System and Location Parameters ---
+  q_UAV: [50, 0, 50]
+  p_BS: [0, 0, 20]
+  possible_user_locations: [
+      [100, 100, 0], [120, 80, 0], [80, 120, 0], [150, 150, 0], [50, 50, 0],
+      [200, 100, 0], [100, 200, 0], [180, 180, 0], [70, 130, 0], [130, 70, 0]
+  ]
+  num_users: 4
+  BS_antennas: 4
+  RIS_elements: 16
+  P_max: 1
+  awgn_power_dbw: -131.0
+  distance_normalization_factor: 300.0
+  bs_antenna_spacing: 0.5
+  ris_element_spacing: 0.5
+
+  # --- Channel Model Parameters ---
+  carrier_frequency: 24_000_000_000  # 24 GHz
+  K_factor_1: 3
+  K_factor_2: 2
+  urban_a: 9.61
+  urban_b: 0.16
+  alpha_1: 2.2
+  eta_NLoS: 0.5
+  kappa_2: 0.001
+  alpha_2: 2.4
+
+  # --- CSI Error and Robustness Parameters ---
+  cascaded_error_rho: 1
+  sigma_jitt_deg: 0
+  S_samples: 1
+# ===================================================================
+# Benchmark Settings (for oracle.py)
+# ===================================================================
+benchmark_settings:
+  enable: True               # Set to True to run oracle.py
+  method: "WMMSE_EIG"        # "WMMSE_EIG" or "WMMSE_EIG_SAA"
+  num_episodes: 2000         # Number of test episodes for the benchmark
+  verbose: False              # Print AO loop progress and warnings
+  parallel_workers: 1
+  # --- Parameters for WMMSE_EIG ---
+  WMMSE_EIG_Params:
+    ao_max: 70              # Max AO iterations (G -> phi -> G -> ...)
+    wmmse_inner: 12         # Inner WMMSE iterations (for fixed phi)
+    wmmse_bisection_steps: 30
+    wmmse_bisection_lam_high: 1e6
+    ao_tol: 0.0001
+    wmmse_tol: 0.0001
+
+  SAA_Params:
+    num_scenarios:  6         # S in SAA
+    resample_each_iter: True   # resample scenarios each AO iter (classic SAA)
