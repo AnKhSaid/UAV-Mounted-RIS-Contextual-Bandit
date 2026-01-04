@@ -10,17 +10,6 @@ If you use this code in your research, please cite our preprint available on arX
 
 **[Preprint] Robust Optimization for UAV-Mounted RIS: A Constrained Contextual Bandit Approach** [https://arxiv.org/abs/2512.24773](https://arxiv.org/abs/2512.24773)
 
-```bibtex
-@misc{said2025uavris,
-      title={Robust Optimization for UAV-Mounted RIS: A Constrained Contextual Bandit Approach}, 
-      author={Anas K. Said},
-      year={2025},
-      eprint={2512.24773},
-      archivePrefix={arXiv},
-      primaryClass={eess.SP},
-      url={[https://arxiv.org/abs/2512.24773](https://arxiv.org/abs/2512.24773)}, 
-}
-```
 
 ---
 
