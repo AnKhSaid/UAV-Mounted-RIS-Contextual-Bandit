@@ -8,7 +8,7 @@ The approach integrates a differentiable safety layer to strictly enforce beamfo
 
 If you use this code in your research, please cite our preprint available on arXiv:
 
-**[Preprint] Robust Optimization for UAV-Mounted RIS: A Constrained Contextual Bandit Approach** [https://arxiv.org/abs/2512.24773](https://arxiv.org/abs/2512.24773)
+**[Preprint] Throughput Optimization in UAV-Mounted RIS under Jittering and Imperfect CSI via DRL** [https://arxiv.org/abs/2512.24773](https://arxiv.org/abs/2512.24773)
 
 
 ---
