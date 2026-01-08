@@ -664,6 +664,133 @@ def plot_convergence_for_level(rho: float, jitter: float, base_config: dict, plo
     print(f"Successfully saved plot: {png_path} and {pdf_path}")
     plt.close(fig)
 
+def main():
+    config_path = 'config.yaml'
+    try:
+        with open(config_path, 'r') as f:
+            master_config = yaml.safe_load(f)
+    except FileNotFoundError:
+        print(f"Error: Config not found at {config_path}")
+        return
+
+    model_types_to_run = ["TD3", "DDPG", "AO-WMMSE", "AO-WMMSE-SAA"]
+    model_types_to_plot = ["TD3", "DDPG", "AO-WMMSE", "AO-WMMSE-SAA", "TD3 (BF-Only)", "DDPG (BF-Only)"]
+    
+    RESULTS_DIR = "./paper_figures_rho"
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    os.makedirs("./runs_figures/logs", exist_ok=True)
+    
+    raw_results_csv_path = os.path.join(RESULTS_DIR, "rho_robustness_raw.csv")
+    
+    SEEDS_TO_RUN = [1, 10, 20, 30, 40, 50, 60, 70, 80, 90] 
+    
+    print(f"--- Running {len(SEEDS_TO_RUN)} seeds per experiment: {SEEDS_TO_RUN} ---")
+
+    print("\n" + "="*20 + " BUILDING JOB LIST " + "="*20)
+    rho_levels = np.arange(1.0, 0.49, -0.1) 
+    
+    completed_jobs = set()
+    if os.path.exists(raw_results_csv_path):
+        try:
+            completed_df = pd.read_csv(raw_results_csv_path)
+            for _, row in completed_df.iterrows():
+                completed_jobs.add((row['Algorithm'], float(row['Rho']), int(row['Seed'])))
+            print(f"Loaded {len(completed_jobs)} completed job-seeds from cache.")
+        except Exception as e:
+            print(f"Warning: Could not read {raw_results_csv_path}. Re-running all jobs. Error: {e}")
+            
+    drl_jobs = []
+    cpu_jobs = []
+    
+    for rho in rho_levels:
+        for model in model_types_to_run:
+            for seed in SEEDS_TO_RUN:
+                job_tuple = (model, float(rho), int(seed))
+                
+                if job_tuple in completed_jobs:
+                    print(f"Skipping (cached): {model} @ Rho {rho:.2f} (Seed {seed})")
+                else:
+                    print(f"Adding to queue:   {model} @ Rho {rho:.2f} (Seed {seed})")
+                    job_info = (model, float(rho), int(seed)) 
+                    if model in ["TD3", "DDPG"]:
+                        drl_jobs.append(job_info)
+                    else:
+                        cpu_jobs.append(job_info)
+
+    total_jobs = len(drl_jobs) + len(cpu_jobs)
+    if not total_jobs:
+        print("No new experiments to run. All results are cached.")
+    else:
+        print(f"\n" + "="*20 + f" RUNNING {total_jobs} EXPERIMENTS WITH POPEN " + "="*20)
+        
+        MAX_DRL_RUNS = 5 
+        MAX_CPU_RUNS = 5 
+        print(f"Will run up to {MAX_DRL_RUNS} DRL (GPU) jobs and {MAX_CPU_RUNS} CPU jobs in parallel.")
+
+        drl_processes = []
+        cpu_processes = []
+        
+        pbar = tqdm(total=total_jobs, desc="Total Experiments")
+        
+        while drl_jobs or cpu_jobs or drl_processes or cpu_processes:
+            
+            for p_list in [drl_processes, cpu_processes]:
+                for i in reversed(range(len(p_list))):
+                    p = p_list[i]
+                    if p.poll() is not None: 
+                        p_list.pop(i)
+                        pbar.update(1)
+            
+            while len(drl_processes) < MAX_DRL_RUNS and drl_jobs:
+                model, rho, seed = drl_jobs.pop(0)
+                cmd = [sys.executable, __file__, "--model", model, "--rho", str(rho), "--seed", str(seed)]
+                p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                drl_processes.append(p)
+
+            while len(cpu_processes) < MAX_CPU_RUNS and cpu_jobs:
+                model, rho, seed = cpu_jobs.pop(0)
+                cmd = [sys.executable, __file__, "--model", model, "--rho", str(rho), "--seed", str(seed)]
+                p = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                cpu_processes.append(p)
+            
+            time.sleep(1.0)
+            
+        pbar.close()
+
+    print("\n" + "="*20 + " PLOTTING RESULTS " + "="*20)
+    
+    if not os.path.exists(raw_results_csv_path):
+        print(f"Error: Raw results file not found: {raw_results_csv_path}. Cannot plot.")
+        return
+        
+    try:
+        raw_df_final = pd.read_csv(raw_results_csv_path)
+    except Exception as e:
+        print(f"Error loading {raw_results_csv_path}: {e}. Cannot plot.")
+        return
+    
+    plot_robustness_results(
+        raw_df_final,
+        os.path.join(RESULTS_DIR, "paper_figure_rho_robustness.png"),
+        title="Performance vs. CSI Quality",
+        xlabel=r"CSI Quality Parameter, $\rho$",
+        model_types=model_types_to_plot,
+        invert_xaxis=True
+    )
+
+    print("\n--- Generating All Convergence Plots ---")
+    for rho in rho_levels:
+        plot_convergence_for_level(
+            rho=float(rho), 
+            jitter=0.0,
+            base_config=master_config, 
+            plot_name_suffix=f"rho_{rho:.2f}".replace('.', '_'),
+            results_dir=RESULTS_DIR,
+            seeds=SEEDS_TO_RUN
+        )
+
+    print("\n" + "="*20 + " ALL EXPERIMENTS FINISHED " + "="*20)
+
 if __name__ == '__main__':
     
     parser = argparse.ArgumentParser(description="Run a single experiment worker.")
@@ -731,7 +858,7 @@ if __name__ == '__main__':
                 import traceback
                 traceback.print_exc(file=f)
             sys.exit(1)
-        
+       
     else:
         try:
             mp.set_start_method("spawn", force=True)
